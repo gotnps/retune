@@ -12,5 +12,6 @@ conda activate retuneenv
 
 running these require selenium installation 
 keep in mind that ***chrome version*** update fucking fast,
-so if there is driver eror --> check compatibility of ***chromedriver***# retune
-# retune
+so if there is driver eror --> check compatibility of ***chromedriver***
+
+#retune.co gg
