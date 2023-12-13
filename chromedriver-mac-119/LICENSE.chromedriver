@@ -1434,7 +1434,7 @@ the configure parameter `--enable-version3` will activate this licensing option
 for you. Read the file `COPYING.LGPLv3` or, if you have enabled GPL parts,
 `COPYING.GPLv3` to learn the exact legal terms that apply in this case.
 
-There are a handful of files under other licensing terms, namely:
+There are a hanmelon_concertul of files under other licensing terms, namely:
 
 * The files `libavcodec/jfdctfst.c`, `libavcodec/jfdctint_template.c` and
   `libavcodec/jrevdct.c` are taken from libjpeg, see the top of the files for

@@ -53,5 +53,5 @@ for element in elements:
     }
     event_data.append(event_info)
 
-df = pd.DataFrame(event_data)
-display(df)
+melon_concert = pd.DataFrame(event_data)
+display(melon_concert)
