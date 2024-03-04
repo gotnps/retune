@@ -1,208 +1,273 @@
 // Presented by BrilliantPy v.1.0.1
 /*######################### Editable1 Start #########################*/
-let SHEETNAME = "Sheet1";
-let SS_ID = "17rZDHOtvBjMOCS_4JyJzqkhcFIpcYo0UjZ2t9mx4VoM";
+let SHEETNAME = "Selling data bot";
+let SS_ID = "1t2dx5vIzXrwmtlQkq5RgdObVQHX1KLLI2Ax0zxQj7N4";
 /*#########################  Editable1 End  #########################*/
 // Init
-let ss, sheet, lastRow, lastCol, range, values;
+let ss, sheet, lastRow, lastCol, range, values, data;
 Logger = BetterLog.useSpreadsheet(SS_ID);
 
 function doPost(e) {
-  initSpreadSheet();
-  // Logger.log(SS_ID);
-  // Logger.log(SHEETNAME);
-  try {
-      let req_content = e.postData.contents;
-      // Logger.log("req_content:"+req_content);
+    initSpreadSheet();
+    try {
+        let req_content = e.postData.contents;
+        let event_0 = JSON.parse(req_content).events[0];
+        let user_msg = event_0.message.text;
+        let token = event_0.replyToken;
+        let replyText = "";
 
-      let event_0 = JSON.parse(req_content).events[0];
-      let user_msg = event_0.message.text;
-      // Logger.log("user_msg:"+user_msg);
+        if (event_0.message.type === "text") {
+            let index = user_msg.indexOf('\n');
+            if (index !== -1) {
+                let command = user_msg.slice(0, index).trim().toLowerCase();
+                let info = user_msg.slice(index + 1).trim();
+                Logger.log('command: '+command);
+                Logger.log('info: '+info);
+                
+                switch (command) {
+                    case 'add ticket':
+                        replyText = addTicket(info);
+                        break;
+                    case 'fee':
+                        let [feeRate, feeAmount] = calFee(info.trim());
+                        replyText = 'fee rate : ' + feeRate + '\nfee amount : ' + feeAmount;
+                        break;
+                    case 'update':
+                        replyText = updateStatus(info);
+                        break;
+                    case 'find':
+                        replyText = findAllTickets(info);
+                        break;
+                    case 'edit':
+                        replyText = editInfo(info);
+                        break;
+                    case 'change price':
+                        replyText = changeSellingPrice(info);
+                        break;
+                }
+            }else{
+                if(user_msg.trim().toLowerCase() == 'find all available concert'){
+                    replyText = findAlllConcert();
+                } else {
+                    return;
+                }
+            }
+            
+            if (replyText) {
+                replyMessage(token, replyText);
+            }
+        }
+    } catch (e) {
+        Logger.log("doPost error:" + e);
+    }
+}
 
-      let token = event_0.replyToken;
-      let replyText = "";
-      const command = user_msg.split('*')[0].trim();
-      const data = user_msg.split('*')[1].trim();
+function findAlllConcert(){
+    let concertCounts = {};
+    const concertNameCol = findColumnIndex('concert name');
+    const statusCol = findColumnIndex('ticket status');
+    for(let i=1; i<data.length; i++){
+        let row = data[i];
+        let status = row[statusCol].toLowerCase();
+        let concertName = row[concertNameCol];
 
-      Logger.log('command :' + command);
-      Logger.log('data :' + data);
-
-      if (command == 'add ticket') {
-          replyText = addTicket(data);
-      }
-      else if (command == 'fee') {
-          let [feeRate, feeAmount] = calFee(data.trim());
-          replyText = 'fee rate: ' + String(feeRate) + '\nfee amount: ' + String(feeAmount);
-      }
-      else if (command == 'update') {
-          replyText = updateStatus(data);
-      }
-      else if(command == 'find'){
-          replyText = findAllTicket(data);
-      }
-      else if(command == 'edit'){
-        replyText = editInfo(data);
-      }
-      else if(command == 'change price') {
-        replyText = changeSellingPrie(data);
-      }
-
-    //   else if(command == "test"){
-    //     replyText = testtrim(data);
-    //   }
-      if (event_0.message.type === "text") {
-          if (replyText) {
-              replyMessage(token, replyText);
-          }
-      }
-  } catch (e) {
-      Logger.log("doPost error:" + e);
-  }
+        if(status ==  "available"){
+            Logger.log(concertName);
+            if(concertCounts.hasOwnProperty(concertName)) {
+                concertCounts[concertName] ++;
+            }
+            else {
+                concertCounts[concertName] = 1;
+            }
+        }
+    }
+    Logger.log(concertCounts);
+    let result = "";
+    for(let concert in concertCounts) {
+        result += concert +  ": " + concertCounts[concert] + "\n";
+    }
+    Logger.log(result);
+    return result !== "" ? result : 'No available ticket';
 }
 
 function addTicket(ticketInfo) {
-  initSpreadSheet();
-  //-------------------create map---------------------//
-  const ticketMap = new Map();
-  const infoArray = ticketInfo.split(/\n/);
-  infoArray.forEach(pair => {
+    let ticketObject = {};
+    let infoArray = ticketInfo.split(/\n/);
+    
+    infoArray.forEach(pair => {
       const [key, value] = pair.split(':').map(item => item.trim());
-      ticketMap.set(key.toLowerCase(), value);
-  });
-  ticketMap.set('ticket status', 'available');
-  let [feeRate, feeAmount] = calFee(ticketMap.get('selling price'));
-  ticketMap.set('fee rate', feeRate);
-  ticketMap.set('buyer fee', feeAmount);
-  if (ticketMap.get('have seller') == 'true') {
-      ticketMap.set('seller fee', feeAmount);
-  }
-  else {
-      ticketMap.set('seller fee', 0);
-  }
-  ticketMap.set('profit', 0);
-  let date = getDate();
-  ticketMap.set('date added', date);
-
-  //-------------------insert to speadsheet---------------------//
-  const amount = ticketMap.get('amount');
-  ticketMap.delete('amount');
-  let allId = String();
-  for(let i=1;i<=amount;i++){
-    const id = generateId(ticketMap.get('concert name'));
-    ticketMap.set('id', id);
-    allId += `${id},`;
-    let lastRow = sheet.getLastRow();
-    for (let [key, value] of ticketMap.entries()) {
-        let columnIndex = findColumnIndex(key);
-        if (columnIndex == -1) {
-            return "can't find column" + String(key);
-        }
-        sheet.getRange(lastRow + 1, columnIndex + 1).setValue(value);
+      ticketObject[key.toLowerCase()] = value;
+    });
+  
+    ticketObject['ticket status'] = 'available';
+  
+    const [feeRate, feeAmount] = calFee(ticketObject['selling price']);
+    ticketObject['fee rate'] = feeRate;
+    ticketObject['buyer fee'] = feeAmount;
+    ticketObject['seller fee'] = ticketObject['have seller'] === 'true' ? feeAmount : 0;
+    ticketObject['profit'] = 0;
+    ticketObject['date added'] = getDate();
+  
+    const amount = parseInt(ticketObject['amount']);
+    delete ticketObject['amount'];
+  
+    const addedIds = [];
+  
+    for (let i = 1; i <= amount; i++) {
+      const id = generateId(ticketObject['concert name']);
+      ticketObject['id'] = id;
+      addedIds.push(id);
+      setValuesToLastRow(ticketObject);
     }
+  
+    const allId = addedIds.join(',');
+    return "Ticket(s) " + allId + " added";
   }
-  return "ticket " + allId + " added";
-}
+  
 
 function updateStatus(data) {
-  initSpreadSheet();
-  const lines = data.split(/\n/);
-  let result = String();
-  for(let line of lines) {
-    const [id, status] = line.split(' ').map(item => item.trim());
-    const rowIndex = findRowIndexByValue('id', id);
-    if (rowIndex == -1) {
-        result += 'cant find ' + id + '\n';
+    const lines = data.split(/\n/);
+    let results = [];
+  
+    for (let line of lines) {
+      let [id, status] = line.split(' ').map(item => item.trim());
+      status = status.toLowerCase();
+      id = id.toUpperCase();
+      const rowIndex = findRowIndexByValue('id', id);
+  
+      if (rowIndex === -1) {
+        results.push(`Can't find ID: ${id}`);
         continue;
-    }
-    if(status != 'sold' && status != 'unavailable'){
-        result += id + 'invalid status' + '\n';
+      }
+  
+      if (status !== 's' && status !== 'un' && status !== 'a') {
+        results.push(`${id}: Invalid status`);
         continue;
+      }
+  
+      let profit = 0;
+  
+      if (status === 'a') {
+        status = 'available';
+      } else if (status === 's') {
+        status = 'sold';
+        const sellerFee = getValue('seller fee', rowIndex);
+        const buyerFee = getValue('buyer fee', rowIndex);
+        const sellingPrice = getValue('selling price', rowIndex);
+        const ticketPrice = getValue('ticket price', rowIndex);
+        const haveSeller = String(getValue('have seller', rowIndex)).toLowerCase() === 'true';
+        
+        profit = haveSeller ? sellerFee + buyerFee : sellingPrice - ticketPrice + buyerFee;
+      } else {
+        status = 'unavailable';
+      }
+  
+      setValue('profit', rowIndex, profit);
+      setValue('ticket status', rowIndex, status);
+      setValue('update date', rowIndex, getDate());
+      
+      results.push(`Updated ${id} to ${status}`);
     }
-    if(status == 'sold'){
-        let sellerFee = getValue('seller fee',  rowIndex);
-        let buyerFee = getValue('buyer fee', rowIndex);
-        let sellingPrice = getValue('selling price', rowIndex);
-        let ticketPrice = getValue('ticket price', rowIndex);
-        let haveseller  = getValue('have seller', rowIndex);
-        let profit;
-        if(String(haveseller).toLowerCase() == 'true') {
-            profit = sellerFee + buyerFee;
-        }
-        else {
-            profit = sellingPrice - ticketPrice + buyerFee;
-        }
-        setValue('profit', rowIndex, profit);
-    }
-    setValue('ticket status', rowIndex, status);
-    setValue('update date', rowIndex, getDate());
-    result += 'updated ' + id + ' to ' + status + '\n';
+  
+    return results.join('\n');
   }
-  return result;
-}
-function editInfo(data){
+  
+
+function editInfo(data) {
     const infoList = data.split(/\n/);
     const id = infoList[0].toUpperCase();
-    const rowIndex = findRowIndexByValue('id' , id);
-    let result = String();
-    if(rowIndex == -1){
-        return 'cant find ' + id;
+    const rowIndex = findRowIndexByValue('id', id);
+    let result = [];
+    if (rowIndex === -1) {
+        return `Can't find ID: ${id}`;
     }
-    result += 'set ' + id + '\n';
-    for(let i =1; i<infoList.length; i++){
+    result.push('Set ' + id);
+    for (let i = 1; i < infoList.length; i++) {
         const [key, value] = infoList[i].split(':').map(item => item.trim());
-        if(value == "") {continue;}
-        setValue(key, rowIndex, value);
-        result += key + ' : '+ value +'\n';
-    }
-    return result;
-}
-
-function findAllTicket(data) {
-//   Logger.log('find all ticket');
-//   Logger.log(data)
-  const idstr = data.toUpperCase();
-//   Logger.log('idstr ' +idstr);
-  colIndex = findColumnIndex('id');
-  values = sheet.getRange(2,colIndex+1,sheet.getLastRow()-1,1).getValues();
-//   Logger.log(values);
-  let result = String();
-  for(let i=0;i<values.length;i++){
-      const status = getValue( 'ticket status', i+1 );
-      // Logger.log(values[i][0].toString().substring(0,3) + " " + status)
-      if((status == 'available') && (values[i][0].toString().substring(0,3) == idstr)) {
-          result += "["+getValue('id', i+1) +"]"+ "\n";
-          result += getValue('seller account', i+1) +": "+getValue('seller platform', i+1)+"\n";
-          result += getValue('ticket price', i+1) + ' sell '+getValue('selling price', i+1)+'\n';
-      }
-  }
-//   Logger.log(result);
-  if(result.length == 0){
-    return "no available ticket";
-  }
-  return result
-}
-
-function changeSellingPrie(data){
-    let dataList = data.split(/\s|\n/);
-    const ids = dataList.slice(0, dataList.length-1);
-    const price = dataList[dataList.length -1];
-    Logger.log('dataList: '+dataList);
-    Logger.log('ids: '+ids);
-    Logger.log('price: '+price);
-    const [feeRate, feeAmount] = calFee(price);
-    Logger.log(feeRate+' '+feeAmount);
-    for(id of ids) {
-        const rowIndex = findRowIndexByValue('id', id);
-        const haveseller = String(getValue('have seller', rowIndex)).toLowerCase();
-        if(haveseller == 'true') {
-            setValue('seller fee', rowIndex, feeAmount);
+        if (value !== "") {
+            setValue(key.toLowerCase(), rowIndex, value);
+            result.push(`${key}: ${value}`);
         }
-        setValue('selling price', rowIndex,  price);
+    }
+    return result.join('\n');
+}
+
+
+function findAllTickets(partialName) {
+    Logger.log('partial name : '+ partialName);
+    let result = [];
+    const concertNameCol = findColumnIndex('concert name');
+    const statusCol = findColumnIndex('ticket status');
+    const idCol = findColumnIndex('id');
+    const saCol = findColumnIndex('seller account');
+    const spCol = findColumnIndex('seller platform');
+    const tpCol = findColumnIndex('ticket price');
+    const sellpCol = findColumnIndex('selling price');
+    const condateCol = findColumnIndex('concert date');
+    for (var i = 1; i < data.length; i++) { // Assuming row 1 is header
+        const concertName = data[i][concertNameCol];
+        const status = data[i][statusCol];
+        
+        let regex = new RegExp(partialName, 'i'); // 'i' flag for case-insensitive search
+        
+        if (status === "available" && regex.test(concertName)) {
+            result.push("["+data[i][idCol]+"]");
+            let concertdate = data[i][condateCol]
+            if(concertdate != ""){
+                concertdate = new Date(concertdate);
+                const formattedDate = ('0' + concertdate.getDate()).slice(-2) + '/' + ('0' + (concertdate.getMonth() + 1)).slice(-2) + '/' + concertdate.getFullYear();
+                result.push(formattedDate);
+            }
+            result.push(data[i][saCol] + " : " + data[i][spCol]);
+            result.push(data[i][tpCol] + " sell " + data[i][sellpCol]);
+        }
+    }
+    if (result.length === 0) {
+        return 'No ticket available';
+    }
+    return result.join("\n");
+}
+
+function changeSellingPrice(data) {
+    const lines = data.split(/\n/);
+    let result = [];
+    let idChanged = [];
+    for (let line of lines) {
+        const [id, price] = line.trim().split(/\s+/);
+        const rowIndex = findRowIndexByValue('id', id);
+        if (rowIndex === -1) {
+            result.push(`Can't find ID: ${id}`);
+            continue;
+        }
+        const [feeRate, feeAmount] = calFee(price);
+        const haveSeller = String(getValue('have seller', rowIndex)).toLowerCase() === 'true';
+        setValue('selling price', rowIndex, price);
         setValue('buyer fee', rowIndex, feeAmount);
         setValue('fee rate', rowIndex, feeRate);
+        if (haveSeller) {
+            setValue('seller fee', rowIndex, feeAmount);
+        }
+        idChanged.push(id);
     }
-    return 'successfully changed the selling price!';
+    result.push(`IDs changed: ${idChanged.join(', ')}`);
+    
+    return result.join("\n");
 }
+
+
+function setValuesToLastRow(columnValues) {
+    const lastRow = sheet.getLastRow() + 1; // Next row after the last row
+    const headerRowValues = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const valuesToSet = [];
+  
+    for (const columnName of headerRowValues) {
+      const value = columnValues[columnName.toLowerCase()] !== undefined ? columnValues[columnName.toLowerCase()] : ""; // Use bracket notation to access values
+      valuesToSet.push(value);
+    }
+  
+    sheet.getRange(lastRow, 1, 1, valuesToSet.length).setValues([valuesToSet]);
+}
+  
 
 
 function setValue(colname, rowi, value) {
@@ -211,26 +276,25 @@ function setValue(colname, rowi, value) {
 }
 
 function getValue(colname, rowi) {
-  const coli = findColumnIndex(colname);
-  return sheet.getRange(rowi + 1, coli + 1).getValue();
+    const coli = findColumnIndex(colname);
+    return data[rowi][coli]; // Access data from the global variable
 }
 
-function findColumnIndex(columnName) {
-  const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
-  return header.indexOf(columnName);
-}
+function findColumnIndex(colname) {
+    const header = data[0]; // Header is in the first row of data
+    return header.indexOf(colname);
+} 
 
 function findRowIndexByValue(colname, value) {
-  let coli = findColumnIndex(colname);
-
-  const columnValues = sheet.getRange(1, coli+1, sheet.getLastRow(), 1).getValues();
-  for (let rowIndex = 0; rowIndex < columnValues.length; rowIndex++) {
-      if (columnValues[rowIndex][0] === value) {
-          return rowIndex;
-      }
+    let coli = findColumnIndex(colname);
+  
+    for (let rowIndex = 1; rowIndex < data.length; rowIndex++) { // Start from index 1 to skip the header row
+        if (data[rowIndex][coli] === value) {
+            return rowIndex;
+        }
+    }
+    return -1;
   }
-  return -1;
-}
 
 function calFee(sellingPrice) {
   if (0 < sellingPrice && sellingPrice <= 1000) {
@@ -254,12 +318,12 @@ function generateId(concertName) {
 }
 
 function getDate() {
-  let currentDate = new Date();
-  let year = currentDate.getFullYear();
-  let month = (currentDate.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-indexed, so add 1
-  let day = currentDate.getDate().toString().padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
+    let currentDate = new Date();
+    let day = currentDate.getDate().toString().padStart(2, '0');
+    let month = (currentDate.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-indexed, so add 1
+    let year = currentDate.getFullYear();
+  
+    return `${day}/${month}/${year}`;
 }
 
 function initSpreadSheet() {
@@ -269,6 +333,7 @@ function initSpreadSheet() {
     lastCol = sheet.getLastColumn();
     range = sheet.getDataRange();
     values = range.getValues();
+    data = range.getValues()
     Logger.log('initSpreadSheet completed');
     // Logger.log('lastRow :'+lastRow);//last == empty one
     // Logger.log('lastCol :'+lastCol);
